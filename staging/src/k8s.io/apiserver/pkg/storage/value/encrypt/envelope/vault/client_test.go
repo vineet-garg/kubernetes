@@ -23,34 +23,91 @@ const (
 )
 
 func TestTokenAuth(t *testing.T) {
+	server := VaultTestServer(t, nil)
+	defer server.Close()
+
 	config := &VaultEnvelopeConfig{
-		Token: uuid.NewRandom().String(),
+		Token:   uuid.NewRandom().String(),
+		Address: server.URL,
+		CACert:  cafile,
 	}
 	encryptAndDecrypt(t, config)
 }
 
 func TestTlsAuth(t *testing.T) {
+	server := VaultTestServer(t, nil)
+	defer server.Close()
+
 	config := &VaultEnvelopeConfig{
 		ClientCert: clientCert,
 		ClientKey:  clientKey,
+		Address:    server.URL,
+		CACert:     cafile,
 	}
 	encryptAndDecrypt(t, config)
 }
 
 func TestAppRoleAuth(t *testing.T) {
+	server := VaultTestServer(t, nil)
+	defer server.Close()
+
 	config := &VaultEnvelopeConfig{
-		RoleId: uuid.NewRandom().String(),
+		RoleId:  uuid.NewRandom().String(),
+		Address: server.URL,
+		CACert:  cafile,
 	}
 	encryptAndDecrypt(t, config)
 }
 
-func encryptAndDecrypt(t *testing.T, config *VaultEnvelopeConfig) {
-	server := VaultTestServer(t)
+func TestCustomTransitPath(t *testing.T) {
+	customPath := "custom-transit"
+	server := customTransitPathServer(t, customPath)
 	defer server.Close()
 
-	config.Address = server.URL
-	config.CACert = cafile
+	config := &VaultEnvelopeConfig{
+		Token:   uuid.NewRandom().String(),
+		Address: server.URL,
+		CACert:  cafile,
+	}
 
+	validPathes := []string{customPath, "/" + customPath, customPath + "/", "/" + customPath + "/"}
+	for _, path := range validPathes {
+		config.TransitPath = path
+		encryptAndDecrypt(t, config)
+	}
+
+	// Invalid transit path will result 404 error
+	config.TransitPath = "invalid-" + customPath
+	client, err := newClientWrapper(config)
+	if err != nil {
+		t.Fatal("fail to initialize Vault client:", err)
+	}
+
+	_, err = client.encrypt("key", "text")
+	if err == nil || !strings.Contains(err.Error(), "404") {
+		t.Error("should get 404 error for non-existed transit path")
+	}
+
+	_, err = client.decrypt("key", "text")
+	if err == nil || !strings.Contains(err.Error(), "404") {
+		t.Error("should get 404 error for non-existed transit path")
+	}
+}
+
+func customTransitPathServer(t *testing.T, transit string) *httptest.Server {
+	handlers := DefaultTestHandlers(t)
+
+	// Replace with custom transit path
+	for _, key := range []string{"/v1/transit/encrypt/", "/v1/transit/decrypt/"} {
+		newKey := strings.Replace(key, "transit", transit, 1)
+		handlers[newKey] = handlers[key]
+		delete(handlers, key)
+	}
+
+	return VaultTestServer(t, handlers)
+}
+
+func encryptAndDecrypt(t *testing.T, config *VaultEnvelopeConfig) {
 	client, err := newClientWrapper(config)
 	if err != nil {
 		t.Fatal("fail to initialize Vault client:", err)
@@ -76,71 +133,14 @@ func encryptAndDecrypt(t *testing.T, config *VaultEnvelopeConfig) {
 	}
 }
 
-func TestClientNegatives(t *testing.T) {
-	server := VaultTestServer(t)
-	defer server.Close()
-
-	// 1. No Authentication info
-	config := &VaultEnvelopeConfig{
-		Address: server.URL,
-		CACert:  cafile,
-	}
-	client, err := newClientWrapper(config)
-	if err == nil {
-		t.Errorf("no expected error for no authentication client, %+v", client)
-	}
-
-	// 2. Invalid tls authentication
-	config = &VaultEnvelopeConfig{
-		Address:    server.URL,
-		CACert:     cafile,
-		ClientCert: clientCert,
-	}
-	client, err = newClientWrapper(config)
-	if err == nil {
-		t.Errorf("no expected error for tls auth no client key, %+v", client)
-	}
-	config = &VaultEnvelopeConfig{
-		Address:   server.URL,
-		CACert:    cafile,
-		ClientKey: clientKey,
-	}
-	client, err = newClientWrapper(config)
-	if err == nil {
-		t.Errorf("no expected error for tls auth no client cert, %+v", client)
-	}
-
-	// 3. Invalid app role authentication
-	config = &VaultEnvelopeConfig{
-		Address:  server.URL,
-		CACert:   cafile,
-		SecretId: uuid.NewRandom().String(),
-	}
-	client, err = newClientWrapper(config)
-	if err == nil {
-		t.Errorf("no expected error for approle auth no role id, %+v", client)
-	}
-
-	// 4. More than one authentication info
-	config = &VaultEnvelopeConfig{
-		Address: server.URL,
-		CACert:  cafile,
-		Token:   uuid.NewRandom().String(),
-		RoleId:  uuid.NewRandom().String(),
-	}
-	client, err = newClientWrapper(config)
-	if err == nil {
-		t.Errorf("no expected error for more than one authentications, %+v", client)
-	}
-}
-
-func VaultTestServer(tb testing.TB) *httptest.Server {
+func VaultTestServer(tb testing.TB, handlers map[string]http.Handler) *httptest.Server {
 	mux := http.NewServeMux()
-	mux.Handle("/v1/transit/encrypt/", &encryptHandler{tb})
-	mux.Handle("/v1/transit/decrypt/", &decryptHandler{tb})
-	mux.Handle("/v1/auth/cert/login", &tlsLoginHandler{tb})
-	mux.Handle("/v1/auth/approle/login", &approleLoginHandler{tb})
-	//	server := httptest.NewServer(mux)
+	if handlers == nil {
+		handlers = DefaultTestHandlers(tb)
+	}
+	for path, handler := range handlers {
+		mux.Handle(path, handler)
+	}
 	server := httptest.NewUnstartedServer(mux)
 
 	cert, err := tls.LoadX509KeyPair(serverCert, serverKey)
@@ -162,6 +162,15 @@ func VaultTestServer(tb testing.TB) *httptest.Server {
 	server.StartTLS()
 
 	return server
+}
+
+func DefaultTestHandlers(tb testing.TB) map[string]http.Handler {
+	return map[string]http.Handler{
+		"/v1/transit/encrypt/":   &encryptHandler{tb},
+		"/v1/transit/decrypt/":   &decryptHandler{tb},
+		"/v1/auth/cert/login":    &tlsLoginHandler{tb},
+		"/v1/auth/approle/login": &approleLoginHandler{tb},
+	}
 }
 
 type encryptHandler struct {

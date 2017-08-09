@@ -12,30 +12,6 @@ import (
 	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 )
 
-func VaultKMSFactory(configFile io.Reader) (envelope.Service, error) {
-	configFileContents, err := ioutil.ReadAll(configFile)
-	if err != nil {
-		return nil, fmt.Errorf("could not read contents: %v", err)
-	}
-
-	var config VaultEnvelopeConfig
-	err = yaml.Unmarshal(configFileContents, &config)
-	if err != nil {
-		return nil, fmt.Errorf("error while parsing file: %v", err)
-	}
-
-	if len(config.KeyNames) == 0 {
-		return nil, fmt.Errorf("vault provider has no valid key names")
-	}
-
-	client, err := newClientWrapper(&config)
-	if err != nil {
-		return nil, err
-	}
-
-	return &vaultEnvelopeService{keyNames: config.KeyNames, client: client}, nil
-}
-
 // VaultConfig contains connection information for Vault transformer
 type VaultEnvelopeConfig struct {
 	// The names of encryption key for Vault transit communication
@@ -60,6 +36,78 @@ type VaultEnvelopeConfig struct {
 
 	// TLSServerName, if set, is used to set the SNI host when connecting via TLS.
 	TLSServerName string `json:"tls-server-name"`
+
+	// The path for transit API, default is "transit"
+	TransitPath string `json:"transit-path"`
+}
+
+// Factory function that create Vault KMS service
+func VaultKMSFactory(configFile io.Reader) (envelope.Service, error) {
+	configFileContents, err := ioutil.ReadAll(configFile)
+	if err != nil {
+		return nil, fmt.Errorf("could not read contents: %v", err)
+	}
+
+	var config VaultEnvelopeConfig
+	err = yaml.Unmarshal(configFileContents, &config)
+	if err != nil {
+		return nil, fmt.Errorf("error while parsing file: %v", err)
+	}
+
+	err = checkConfig(&config)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := newClientWrapper(&config)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vaultEnvelopeService{keyNames: config.KeyNames, client: client}, nil
+}
+
+func checkConfig(config *VaultEnvelopeConfig) error {
+	if len(config.KeyNames) == 0 {
+		return fmt.Errorf("vault provider has no valid key names")
+	}
+
+	if config.Address == "" {
+		return fmt.Errorf("vault provider has no valid address")
+	}
+
+	return checkAuthConfig(config)
+}
+
+func checkAuthConfig(config *VaultEnvelopeConfig) error {
+	var count uint
+
+	if config.Token != "" {
+		count++
+	}
+
+	if config.ClientCert != "" || config.ClientKey != "" {
+		if config.ClientCert == "" || config.ClientKey == "" {
+			return fmt.Errorf("vault provider has invalid TLS authentication information")
+		}
+		count++
+	}
+
+	if config.RoleId != "" || config.SecretId != "" {
+		if config.RoleId == "" {
+			return fmt.Errorf("vault provider has invalid approle authentication information")
+		}
+		count++
+	}
+
+	if count == 0 {
+		return fmt.Errorf("vault provider has no authentication information")
+	}
+	if count > 1 {
+		return fmt.Errorf("vault provider has more than one authentication information")
+	}
+
+	return nil
 }
 
 type vaultEnvelopeService struct {
@@ -102,6 +150,6 @@ func (s *vaultEnvelopeService) Encrypt(data []byte) (string, error) {
 	}
 
 	// The format of cipher from Vault is "vault:v1:....".
-	// "vault:" is unnecessary for this transformer, remove it.
+	// "vault:" is unnecessary for this transformer, replace it with key name.
 	return strings.Replace(cipher, "vault", key, 1), nil
 }

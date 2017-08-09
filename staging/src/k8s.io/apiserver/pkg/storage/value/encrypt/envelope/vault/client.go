@@ -2,24 +2,20 @@ package vault
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/vault/api"
 )
 
 // Handle all communication with Vault server
 type clientWrapper struct {
-	client *api.Client
+	client      *api.Client
+	encryptPath string
+	decryptPath string
 }
 
 // Initialize a client for Vault.
-// It will check the connection information, also execute login if needed.
 func newClientWrapper(config *VaultEnvelopeConfig) (*clientWrapper, error) {
-	// Check the authentication parameters in config
-	err := checkAuthConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
 	client, err := newApiClient(config)
 	if err != nil {
 		return nil, err
@@ -38,38 +34,19 @@ func newClientWrapper(config *VaultEnvelopeConfig) (*clientWrapper, error) {
 		return nil, err
 	}
 
-	return &clientWrapper{client}, nil
-}
-
-func checkAuthConfig(config *VaultEnvelopeConfig) error {
-	var count uint
-
-	if config.Token != "" {
-		count++
+	// Vault transit path is configurable.
+	// "path", "/path", "path/" and "/path/" are the same.
+	transit := "transit"
+	if config.TransitPath != "" {
+		transit = strings.Trim(config.TransitPath, "/")
 	}
 
-	if config.ClientCert != "" || config.ClientKey != "" {
-		if config.ClientCert == "" || config.ClientKey == "" {
-			return fmt.Errorf("vault provider has invalid TLS authentication information")
-		}
-		count++
+	wrapper := clientWrapper{
+		client:      client,
+		encryptPath: transit + "/encrypt/",
+		decryptPath: transit + "/decrypt/",
 	}
-
-	if config.RoleId != "" || config.SecretId != "" {
-		if config.RoleId == "" {
-			return fmt.Errorf("vault provider has invalid approle authentication information")
-		}
-		count++
-	}
-
-	if count == 0 {
-		return fmt.Errorf("vault provider has no authentication information")
-	}
-	if count > 1 {
-		return fmt.Errorf("vault provider has more than one authentication information")
-	}
-
-	return nil
+	return &wrapper, nil
 }
 
 func newApiClient(config *VaultEnvelopeConfig) (*api.Client, error) {
@@ -121,7 +98,7 @@ func (c *clientWrapper) decrypt(keyName string, cipher string) (string, error) {
 	data := map[string]interface{}{
 		"ciphertext": cipher,
 	}
-	resp, err := c.client.Logical().Write("transit/decrypt/"+keyName, data)
+	resp, err := c.client.Logical().Write(c.decryptPath+keyName, data)
 	if err != nil {
 		return result, err
 	}
@@ -140,7 +117,7 @@ func (c *clientWrapper) encrypt(keyName string, plain string) (string, error) {
 	data := map[string]interface{}{
 		"plaintext": plain,
 	}
-	resp, err := c.client.Logical().Write("transit/encrypt/"+keyName, data)
+	resp, err := c.client.Logical().Write(c.encryptPath+keyName, data)
 	if err != nil {
 		return result, err
 	}
