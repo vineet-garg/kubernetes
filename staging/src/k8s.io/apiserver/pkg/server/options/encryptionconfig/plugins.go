@@ -31,7 +31,6 @@ import (
 )
 
 func init() {
-	fmt.Println("!! Register vault KMS service.")
 	KMSPluginRegistry.Register("vault", vault.VaultKMSFactory)
 }
 

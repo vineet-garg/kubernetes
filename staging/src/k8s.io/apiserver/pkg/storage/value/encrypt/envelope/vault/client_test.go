@@ -22,41 +22,39 @@ const (
 	clientKey  = "testdata/client.key"
 )
 
-func TestTokenAuth(t *testing.T) {
+func TestTypicalCase(t *testing.T) {
 	server := VaultTestServer(t, nil)
 	defer server.Close()
 
-	config := &VaultEnvelopeConfig{
+	configToken := &VaultEnvelopeConfig{
 		Token:   uuid.NewRandom().String(),
 		Address: server.URL,
 		CACert:  cafile,
 	}
-	encryptAndDecrypt(t, config)
-}
-
-func TestTlsAuth(t *testing.T) {
-	server := VaultTestServer(t, nil)
-	defer server.Close()
-
-	config := &VaultEnvelopeConfig{
+	configTls := &VaultEnvelopeConfig{
 		ClientCert: clientCert,
 		ClientKey:  clientKey,
 		Address:    server.URL,
 		CACert:     cafile,
 	}
-	encryptAndDecrypt(t, config)
-}
-
-func TestAppRoleAuth(t *testing.T) {
-	server := VaultTestServer(t, nil)
-	defer server.Close()
-
-	config := &VaultEnvelopeConfig{
+	configRole := &VaultEnvelopeConfig{
 		RoleId:  uuid.NewRandom().String(),
 		Address: server.URL,
 		CACert:  cafile,
 	}
-	encryptAndDecrypt(t, config)
+
+	configs := []struct {
+		name   string
+		config *VaultEnvelopeConfig
+	}{
+		{"AuthByToken", configToken},
+		{"AuthByTls", configTls},
+		{"AuthByAppRole", configRole},
+	}
+
+	for _, testCase := range configs {
+		encryptAndDecrypt(t, testCase.name, testCase.config)
+	}
 }
 
 func TestCustomTransitPath(t *testing.T) {
@@ -70,10 +68,11 @@ func TestCustomTransitPath(t *testing.T) {
 		CACert:  cafile,
 	}
 
+	// Work with custom transit path
 	validPathes := []string{customPath, "/" + customPath, customPath + "/", "/" + customPath + "/"}
 	for _, path := range validPathes {
 		config.TransitPath = path
-		encryptAndDecrypt(t, config)
+		encryptAndDecrypt(t, path, config)
 	}
 
 	// Invalid transit path will result 404 error
@@ -83,14 +82,40 @@ func TestCustomTransitPath(t *testing.T) {
 		t.Fatal("fail to initialize Vault client:", err)
 	}
 
-	_, err = client.encrypt("key", "text")
+	_, err = client.encrypt("key", "plain")
 	if err == nil || !strings.Contains(err.Error(), "404") {
 		t.Error("should get 404 error for non-existed transit path")
 	}
 
-	_, err = client.decrypt("key", "text")
+	_, err = client.decrypt("key", "cipher")
 	if err == nil || !strings.Contains(err.Error(), "404") {
 		t.Error("should get 404 error for non-existed transit path")
+	}
+}
+
+func encryptAndDecrypt(t *testing.T, name string, config *VaultEnvelopeConfig) {
+	client, err := newClientWrapper(config)
+	if err != nil {
+		t.Fatal("name: %s, fail to initialize Vault client: %s", name, err)
+	}
+
+	key := "key"
+	text := "hello"
+
+	cipher, err := client.encrypt(key, text)
+	if err != nil {
+		t.Fatalf("name: %s, fail to encrypt text, error: %s", name, err)
+	}
+	if !strings.HasPrefix(cipher, "vault:v1:") {
+		t.Errorf("name: %s, invalid cipher text: %s", name, cipher)
+	}
+
+	plain, err := client.decrypt(key, cipher)
+	if err != nil {
+		t.Fatalf("name: %s, fail to decrypt text, error: %s", name, err)
+	}
+	if text != plain {
+		t.Errorf("name: %s, expect %s, but %s", name, text, plain)
 	}
 }
 
@@ -107,29 +132,104 @@ func customTransitPathServer(t *testing.T, transit string) *httptest.Server {
 	return VaultTestServer(t, handlers)
 }
 
-func encryptAndDecrypt(t *testing.T, config *VaultEnvelopeConfig) {
+func TestForbiddenRequest(t *testing.T) {
+	forbiddenFunc := func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+	}
+
+	handlers := map[string]http.Handler{
+		"/v1/transit/encrypt/": http.HandlerFunc(forbiddenFunc),
+		"/v1/transit/decrypt/": http.HandlerFunc(forbiddenFunc),
+	}
+	server := VaultTestServer(t, handlers)
+	defer server.Close()
+
+	config := &VaultEnvelopeConfig{
+		Token:   uuid.NewRandom().String(),
+		Address: server.URL,
+		CACert:  cafile,
+	}
 	client, err := newClientWrapper(config)
 	if err != nil {
-		t.Fatal("fail to initialize Vault client:", err)
+		t.Fatal("fail to initialize Vault client: %s", err)
 	}
 
-	key := "key"
-	text := "hello"
+	_, err = client.encrypt("key", "plain")
+	if err == nil {
+		t.Error("error should not be nil for 403 response")
+	}
+	forbidden, ok := err.(*forbiddenError)
+	if !ok {
+		t.Error("forbidden error should be return for 403 response")
+	}
+	if forbidden.version != client.version || forbidden.err == nil {
+		t.Errorf("error forbidden value, %+v", forbidden)
+	}
 
-	cipher, err := client.encrypt(key, text)
-	if err != nil {
-		t.Fatal("fail to encrypt text:", err)
+	_, err = client.decrypt("key", "cipher")
+	if err == nil {
+		t.Error("error should not be nil for 403 response")
 	}
-	if !strings.HasPrefix(cipher, "vault:v1:") {
-		t.Fatalf("invalid cipher text: %s", cipher)
+	forbidden, ok = err.(*forbiddenError)
+	if !ok {
+		t.Error("forbidden error should be return for 403 response")
+	}
+	if forbidden.version != client.version || forbidden.err == nil {
+		t.Errorf("error forbidden value, %+v", forbidden)
+	}
+}
+
+func TestRefreshToken(t *testing.T) {
+	server := VaultTestServer(t, nil)
+	defer server.Close()
+
+	configTls := &VaultEnvelopeConfig{
+		ClientCert: clientCert,
+		ClientKey:  clientKey,
+		Address:    server.URL,
+		CACert:     cafile,
+	}
+	configRole := &VaultEnvelopeConfig{
+		RoleId:  uuid.NewRandom().String(),
+		Address: server.URL,
+		CACert:  cafile,
 	}
 
-	plain, err := client.decrypt(key, cipher)
-	if err != nil {
-		t.Fatal("fail to decrypt text:", err)
+	configs := []struct {
+		name   string
+		config *VaultEnvelopeConfig
+	}{
+		{"AuthByTls", configTls},
+		{"AuthByAppRole", configRole},
 	}
-	if text != plain {
-		t.Fatal("expect %s, but %s", text, plain)
+
+	for _, testCase := range configs {
+		client, err := newClientWrapper(testCase.config)
+		if err != nil {
+			t.Fatalf("name: %s, fail to initialize Vault client: %s", testCase.name, err)
+		}
+
+		version := client.version
+
+		// Refresh token successfully with version increase.
+		err = client.refreshToken(testCase.config, version)
+		if err != nil {
+			t.Fatalf("name: %s, unexpecte error when refresh token: %s", testCase.name, err)
+		}
+		if client.version != version+1 {
+			t.Errorf("name: %s, client version expect %s, but %s", testCase.name, version+1, client.version)
+		}
+
+		// Refresh token with old version, not increase version.
+		oldVersion := version
+		version = client.version
+		err = client.refreshToken(testCase.config, oldVersion)
+		if err != nil {
+			t.Fatalf("name: %s, unexpecte error when refresh token: %s", testCase.name, err)
+		}
+		if client.version != version {
+			t.Errorf("name: %s, client version expect %s, but %s", testCase.name, version, client.version)
+		}
 	}
 }
 
