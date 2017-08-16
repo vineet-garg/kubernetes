@@ -13,6 +13,7 @@ type clientWrapper struct {
 	client      *api.Client
 	encryptPath string
 	decryptPath string
+        authPath    string
 
 	// We may update token for api.Client, but there is no sync for api.Client.
 	// Read lock for encrypt/decrypt requests, write lock for login requests which
@@ -35,10 +36,16 @@ func newClientWrapper(config *VaultEnvelopeConfig) (*clientWrapper, error) {
 		transit = strings.Trim(config.TransitPath, "/")
 	}
 
+        // auth path is configurable. "path", "/path", "path/" and "/path/" are the same.
+        auth := "auth/"
+        if config.AuthPath != "" {
+            auth = strings.Trim(config.AuthPath, "/")
+        }
 	wrapper := &clientWrapper{
 		client:      client,
 		encryptPath: "/v1/" + transit + "/encrypt/",
 		decryptPath: "/v1/" + transit + "/decrypt/",
+                authPath:    auth + "/",
 	}
 
 	// Set token for the api.client.
@@ -96,7 +103,7 @@ func (c *clientWrapper) refreshToken(config *VaultEnvelopeConfig, version uint) 
 }
 
 func (c *clientWrapper) tlsToken(config *VaultEnvelopeConfig) error {
-	resp, err := c.client.Logical().Write("/auth/cert/login", nil)
+	resp, err := c.client.Logical().Write(c.authPath + "cert/login", nil)
 	if err != nil {
 		return err
 	}
@@ -110,7 +117,7 @@ func (c *clientWrapper) appRoleToken(config *VaultEnvelopeConfig) error {
 		"role_id":   config.RoleId,
 		"secret_id": config.SecretId,
 	}
-	resp, err := c.client.Logical().Write("/auth/approle/login", data)
+	resp, err := c.client.Logical().Write(c.authPath + "approle/login", data)
 	if err != nil {
 		return err
 	}
