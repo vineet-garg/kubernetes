@@ -12,6 +12,7 @@ type clientWrapper struct {
 	client      *api.Client
 	encryptPath string
 	decryptPath string
+        authPath string
 }
 
 // Initialize a client for Vault.
@@ -20,15 +21,23 @@ func newClientWrapper(config *VaultEnvelopeConfig) (*clientWrapper, error) {
 	if err != nil {
 		return nil, err
 	}
+        
+        // auth path is configurable.
+        // "path", "/path", "path/" and "/path/" are the same.
+        auth := "auth/"
+        if config.AuthPath != "" {
+                auth = strings.Trim(config.AuthPath, "/") + "/"
+        }
+        
 
 	// Set token for the client
 	switch {
 	case config.Token != "":
 		client.SetToken(config.Token)
 	case config.ClientCert != "" && config.ClientKey != "":
-		err = loginByTls(config, client)
+		err = loginByTls(config, client, auth)
 	case config.RoleId != "":
-		err = loginByAppRole(config, client)
+		err = loginByAppRole(config, client, auth)
 	}
 	if err != nil {
 		return nil, err
@@ -40,6 +49,7 @@ func newClientWrapper(config *VaultEnvelopeConfig) (*clientWrapper, error) {
 	if config.TransitPath != "" {
 		transit = strings.Trim(config.TransitPath, "/")
 	}
+        
 
 	wrapper := clientWrapper{
 		client:      client,
@@ -68,8 +78,8 @@ func newApiClient(config *VaultEnvelopeConfig) (*api.Client, error) {
 	return api.NewClient(apiConfig)
 }
 
-func loginByTls(config *VaultEnvelopeConfig, client *api.Client) error {
-	resp, err := client.Logical().Write("/auth/cert/login", nil)
+func loginByTls(config *VaultEnvelopeConfig, client *api.Client, auth string) error {
+	resp, err := client.Logical().Write(auth + "cert/login", nil)
 	if err != nil {
 		return err
 	}
@@ -78,12 +88,12 @@ func loginByTls(config *VaultEnvelopeConfig, client *api.Client) error {
 	return nil
 }
 
-func loginByAppRole(config *VaultEnvelopeConfig, client *api.Client) error {
+func loginByAppRole(config *VaultEnvelopeConfig, client *api.Client, auth string) error {
 	data := map[string]interface{}{
 		"role_id":   config.RoleId,
 		"secret_id": config.SecretId,
 	}
-	resp, err := client.Logical().Write("/auth/approle/login", data)
+	resp, err := client.Logical().Write(auth + "approle/login", data)
 	if err != nil {
 		return err
 	}

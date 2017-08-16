@@ -60,8 +60,8 @@ func TestAppRoleAuth(t *testing.T) {
 }
 
 func TestCustomTransitPath(t *testing.T) {
-	customPath := "custom-transit"
-	server := customTransitPathServer(t, customPath)
+	customTransitPath := "custom-transit"
+	server := customTransitPathServer(t, customTransitPath)
 	defer server.Close()
 
 	config := &VaultEnvelopeConfig{
@@ -69,15 +69,15 @@ func TestCustomTransitPath(t *testing.T) {
 		Address: server.URL,
 		CACert:  cafile,
 	}
-
-	validPathes := []string{customPath, "/" + customPath, customPath + "/", "/" + customPath + "/"}
-	for _, path := range validPathes {
+        
+	validTransitPaths := []string{customTransitPath, "/" + customTransitPath, customTransitPath + "/", "/" + customTransitPath + "/"}
+	for _, path := range validTransitPaths {
 		config.TransitPath = path
 		encryptAndDecrypt(t, config)
 	}
-
+       
 	// Invalid transit path will result 404 error
-	config.TransitPath = "invalid-" + customPath
+	config.TransitPath = "invalid-" + customTransitPath
 	client, err := newClientWrapper(config)
 	if err != nil {
 		t.Fatal("fail to initialize Vault client:", err)
@@ -92,6 +92,34 @@ func TestCustomTransitPath(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "404") {
 		t.Error("should get 404 error for non-existed transit path")
 	}
+
+}
+   
+func TestCustomAuthPath(t *testing.T) {
+        customAuthPath := "custom-auth"
+        server := customAuthPathServer(t, customAuthPath)
+        defer server.Close()
+
+        appRoleConfig := &VaultEnvelopeConfig{
+                RoleId:  uuid.NewRandom().String(),
+                Address: server.URL,
+                CACert:  cafile,
+        }
+        
+        validAuthPaths := []string{customAuthPath, "/" + customAuthPath, customAuthPath + "/", "/" + customAuthPath + "/"}
+        for _, path := range validAuthPaths {
+                appRoleConfig.AuthPath = path
+                encryptAndDecrypt(t, appRoleConfig)
+        }
+
+
+        // Invalid auth path will result 404 error
+        appRoleConfig.AuthPath = "invalid-" + customAuthPath
+        _, err := newClientWrapper(appRoleConfig)
+        if err == nil {
+                t.Error("should fail to initialize Vault client")
+        }
+
 }
 
 func customTransitPathServer(t *testing.T, transit string) *httptest.Server {
@@ -103,8 +131,22 @@ func customTransitPathServer(t *testing.T, transit string) *httptest.Server {
 		handlers[newKey] = handlers[key]
 		delete(handlers, key)
 	}
-
+        
 	return VaultTestServer(t, handlers)
+}
+
+func customAuthPathServer(t *testing.T, auth string) *httptest.Server {
+        handlers := DefaultTestHandlers(t)
+
+        // Replace with custom auth path
+        for _, key := range []string{"/v1/auth/cert/login", "/v1/auth/approle/login"} {
+                newKey := strings.Replace(key, "auth", auth, 1)
+                handlers[newKey] = handlers[key]
+                delete(handlers, key)
+        }
+
+
+        return VaultTestServer(t, handlers)
 }
 
 func encryptAndDecrypt(t *testing.T, config *VaultEnvelopeConfig) {
