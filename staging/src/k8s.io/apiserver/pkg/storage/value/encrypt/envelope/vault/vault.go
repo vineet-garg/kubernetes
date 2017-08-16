@@ -39,9 +39,6 @@ type VaultEnvelopeConfig struct {
 
 	// The path for transit API, default is "transit"
 	TransitPath string `json:"transit-path"`
-
-        // The path for auth backend, default is "auth"
-        AuthPath string `json:"auth-path"`
 }
 
 // Factory function that create Vault KMS service
