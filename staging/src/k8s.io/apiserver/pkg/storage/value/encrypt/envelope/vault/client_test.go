@@ -1,3 +1,22 @@
+/*
+Copyright 2017 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// Package vault implements envelop encryption provider based on Vault KMS
+
+
 package vault
 
 import (
@@ -94,29 +113,28 @@ func TestCustomTransitPath(t *testing.T) {
 }
 
 func TestCustomAuthPath(t *testing.T) {
-        customAuthPath := "custom-auth"
-        server := customAuthPathServer(t, customAuthPath)
-        defer server.Close()
+	customAuthPath := "custom-auth"
+	server := customAuthPathServer(t, customAuthPath)
+	defer server.Close()
 
-        appRoleConfig := &VaultEnvelopeConfig{
-                RoleId:  uuid.NewRandom().String(),
-                Address: server.URL,
-                CACert:  cafile,
-        }
-        
-        validAuthPaths := []string{customAuthPath, "/" + customAuthPath, customAuthPath + "/", "/" + customAuthPath + "/"}
-        for _, path := range validAuthPaths {
-                appRoleConfig.AuthPath = path
-                encryptAndDecrypt(t, "transit", appRoleConfig)
-        }
+	appRoleConfig := &VaultEnvelopeConfig{
+		RoleId:  uuid.NewRandom().String(),
+		Address: server.URL,
+		CACert:  cafile,
+	}
 
+	validAuthPaths := []string{customAuthPath, "/" + customAuthPath, customAuthPath + "/", "/" + customAuthPath + "/"}
+	for _, path := range validAuthPaths {
+		appRoleConfig.AuthPath = path
+		encryptAndDecrypt(t, "transit", appRoleConfig)
+	}
 
-        // Invalid auth path will result 404 error
-        appRoleConfig.AuthPath = "invalid-" + customAuthPath
-        _, err := newClientWrapper(appRoleConfig)
-        if err == nil {
-                t.Error("should fail to initialize Vault client")
-        }
+	// Invalid auth path will result 404 error
+	appRoleConfig.AuthPath = "invalid-" + customAuthPath
+	_, err := newClientWrapper(appRoleConfig)
+	if err == nil {
+		t.Error("should fail to initialize Vault client")
+	}
 
 }
 
@@ -160,17 +178,16 @@ func customTransitPathServer(t *testing.T, transit string) *httptest.Server {
 }
 
 func customAuthPathServer(t *testing.T, auth string) *httptest.Server {
-        handlers := DefaultTestHandlers(t)
+	handlers := DefaultTestHandlers(t)
 
-        // Replace with custom auth path
-        for _, key := range []string{"/v1/auth/cert/login", "/v1/auth/approle/login"} {
-                newKey := strings.Replace(key, "auth", auth, 1)
-                handlers[newKey] = handlers[key]
-                delete(handlers, key)
-        }
+	// Replace with custom auth path
+	for _, key := range []string{"/v1/auth/cert/login", "/v1/auth/approle/login"} {
+		newKey := strings.Replace(key, "auth", auth, 1)
+		handlers[newKey] = handlers[key]
+		delete(handlers, key)
+	}
 
-
-        return VaultTestServer(t, handlers)
+	return VaultTestServer(t, handlers)
 }
 
 func TestForbiddenRequest(t *testing.T) {
