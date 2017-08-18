@@ -15,8 +15,6 @@ limitations under the License.
 */
 
 // Package vault implements envelop encryption provider based on Vault KMS
-
-
 package vault
 
 import (
@@ -45,18 +43,18 @@ func TestTypicalCase(t *testing.T) {
 	server := VaultTestServer(t, nil)
 	defer server.Close()
 
-	configToken := &VaultEnvelopeConfig{
+	configToken := &EnvelopeConfig{
 		Token:   uuid.NewRandom().String(),
 		Address: server.URL,
 		CACert:  cafile,
 	}
-	configTls := &VaultEnvelopeConfig{
+	configTLS := &EnvelopeConfig{
 		ClientCert: clientCert,
 		ClientKey:  clientKey,
 		Address:    server.URL,
 		CACert:     cafile,
 	}
-	configRole := &VaultEnvelopeConfig{
+	configRole := &EnvelopeConfig{
 		RoleId:  uuid.NewRandom().String(),
 		Address: server.URL,
 		CACert:  cafile,
@@ -64,10 +62,10 @@ func TestTypicalCase(t *testing.T) {
 
 	configs := []struct {
 		name   string
-		config *VaultEnvelopeConfig
+		config *EnvelopeConfig
 	}{
 		{"AuthByToken", configToken},
-		{"AuthByTls", configTls},
+		{"AuthByTLS", configTLS},
 		{"AuthByAppRole", configRole},
 	}
 
@@ -81,7 +79,7 @@ func TestCustomTransitPath(t *testing.T) {
 	server := customTransitPathServer(t, customPath)
 	defer server.Close()
 
-	config := &VaultEnvelopeConfig{
+	config := &EnvelopeConfig{
 		Token:   uuid.NewRandom().String(),
 		Address: server.URL,
 		CACert:  cafile,
@@ -117,7 +115,7 @@ func TestCustomAuthPath(t *testing.T) {
 	server := customAuthPathServer(t, customAuthPath)
 	defer server.Close()
 
-	appRoleConfig := &VaultEnvelopeConfig{
+	appRoleConfig := &EnvelopeConfig{
 		RoleId:  uuid.NewRandom().String(),
 		Address: server.URL,
 		CACert:  cafile,
@@ -138,7 +136,7 @@ func TestCustomAuthPath(t *testing.T) {
 
 }
 
-func encryptAndDecrypt(t *testing.T, name string, config *VaultEnvelopeConfig) {
+func encryptAndDecrypt(t *testing.T, name string, config *EnvelopeConfig) {
 	client, err := newClientWrapper(config)
 	if err != nil {
 		t.Fatal("name: %s, fail to initialize Vault client: %s", name, err)
@@ -202,7 +200,7 @@ func TestForbiddenRequest(t *testing.T) {
 	server := VaultTestServer(t, handlers)
 	defer server.Close()
 
-	config := &VaultEnvelopeConfig{
+	config := &EnvelopeConfig{
 		Token:   uuid.NewRandom().String(),
 		Address: server.URL,
 		CACert:  cafile,
@@ -241,13 +239,13 @@ func TestRefreshToken(t *testing.T) {
 	server := VaultTestServer(t, nil)
 	defer server.Close()
 
-	configTls := &VaultEnvelopeConfig{
+	configTLS := &EnvelopeConfig{
 		ClientCert: clientCert,
 		ClientKey:  clientKey,
 		Address:    server.URL,
 		CACert:     cafile,
 	}
-	configRole := &VaultEnvelopeConfig{
+	configRole := &EnvelopeConfig{
 		RoleId:  uuid.NewRandom().String(),
 		Address: server.URL,
 		CACert:  cafile,
@@ -255,9 +253,9 @@ func TestRefreshToken(t *testing.T) {
 
 	configs := []struct {
 		name   string
-		config *VaultEnvelopeConfig
+		config *EnvelopeConfig
 	}{
-		{"AuthByTls", configTls},
+		{"AuthByTLS", configTLS},
 		{"AuthByAppRole", configRole},
 	}
 
@@ -401,8 +399,8 @@ func (h *approleLoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		h.tb.Error("error request message for approle login: ", err)
 	}
 
-	roleId := msg["role_id"].(string)
-	if roleId == "" {
+	roleID := msg["role_id"].(string)
+	if roleID == "" {
 		h.tb.Error("the approle login doesn't contain valid role id.")
 	}
 

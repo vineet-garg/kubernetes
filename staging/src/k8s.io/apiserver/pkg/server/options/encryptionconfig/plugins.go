@@ -31,7 +31,7 @@ import (
 )
 
 func init() {
-	KMSPluginRegistry.Register("vault", vault.VaultKMSFactory)
+	KMSPluginRegistry.Register("vault", vault.KMSFactory)
 }
 
 // Factory is a function that returns an envelope Service for encryption providers.

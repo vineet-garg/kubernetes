@@ -15,8 +15,6 @@ limitations under the License.
 */
 
 // Package vault implements envelop encryption provider based on Vault KMS
-
-
 package vault
 
 import (
@@ -111,7 +109,7 @@ func (c *clientWrapper) refreshToken(config *VaultEnvelopeConfig, version uint) 
 	switch {
 	case config.ClientCert != "" && config.ClientKey != "":
 		err = c.tlsToken(config)
-	case config.RoleId != "":
+	case config.RoleID != "":
 		err = c.appRoleToken(config)
 	default:
 		err = fmt.Errorf("invalid authentication configuration %+v", config)
@@ -133,8 +131,8 @@ func (c *clientWrapper) tlsToken(config *VaultEnvelopeConfig) error {
 
 func (c *clientWrapper) appRoleToken(config *VaultEnvelopeConfig) error {
 	data := map[string]interface{}{
-		"role_id":   config.RoleId,
-		"secret_id": config.SecretId,
+		"role_id":   config.RoleID,
+		"secret_id": config.SecretID,
 	}
 	resp, err := c.client.Logical().Write(c.authPath+"approle/login", data)
 	if err != nil {

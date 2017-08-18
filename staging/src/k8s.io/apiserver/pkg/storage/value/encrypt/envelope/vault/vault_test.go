@@ -15,8 +15,6 @@ limitations under the License.
 */
 
 // Package vault implements envelop encryption provider based on Vault KMS
-
-
 package vault
 
 import (
@@ -277,7 +275,7 @@ addr: @url@
 ca-cert: testdata/ca.crt
 `
 	// tls authentication, but no client key
-	configTlsWithoutClientKey := `
+	configTLSWithoutClientKey := `
 key-names: 
   - @key@
 addr: @url@
@@ -285,7 +283,7 @@ ca-cert: testdata/ca.crt
 client-cert: testdata/client.crt
 `
 	// tls authentication, but no client cert
-	configTlsWithoutClientCert := `
+	configTLSWithoutClientCert := `
 key-names: 
   - @key@
 addr: @url@
@@ -293,7 +291,7 @@ ca-cert: testdata/ca.crt
 client-key: testdata/client.key
 `
 	// approle authentication, but no role id
-	configRoleWithoutRoleId := `
+	configRoleWithoutRoleID := `
 key-names: 
   - @key@
 addr: @url@
@@ -317,9 +315,9 @@ role-id: 655a9287-f1be-4be0-844c-4f13a1757532
 		{configWithoutKey, "there is no key name"},
 		{configWithoutAddress, "there is no address"},
 		{configWithoutAuth, "there is no authentication"},
-		{configTlsWithoutClientKey, "there is no client key file"},
-		{configTlsWithoutClientCert, "there is no client cert file"},
-		{configRoleWithoutRoleId, "there is no role id"},
+		{configTLSWithoutClientKey, "there is no client key file"},
+		{configTLSWithoutClientCert, "there is no client cert file"},
+		{configRoleWithoutRoleID, "there is no role id"},
 		{configMoreThanOneAuth, "there are more than one authentications"},
 	}
 
@@ -336,5 +334,5 @@ func serviceTestFactory(config, url string, keys ...string) (envelope.Service, e
 	for _, k := range keys {
 		config = strings.Replace(config, "@key@", k, 1)
 	}
-	return VaultKMSFactory(strings.NewReader(config))
+	return KMSFactory(strings.NewReader(config))
 }

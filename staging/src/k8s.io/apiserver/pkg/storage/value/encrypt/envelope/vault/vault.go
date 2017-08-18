@@ -15,8 +15,6 @@ limitations under the License.
 */
 
 // Package vault implements envelop encryption provider based on Vault KMS
-
-
 package vault
 
 import (
@@ -31,8 +29,8 @@ import (
 	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 )
 
-// VaultConfig contains connection information for Vault transformer
-type VaultEnvelopeConfig struct {
+// envelopConfig contains connection information for Vault transformer
+type envelopeConfig struct {
 	// The names of encryption key for Vault transit communication
 	KeyNames []string `json:"key-names"`
 	// Vault listen address, for example https://localhost:8200
@@ -46,8 +44,8 @@ type VaultEnvelopeConfig struct {
 	ClientKey  string `json:"client-key"`
 
 	// AppRole authentication information
-	RoleId   string `json:"role-id"`
-	SecretId string `json:"secret-id"`
+	RoleID   string `json:"role-id"`
+	SecretID string `json:"secret-id"`
 
 	// CACert is the path to a PEM-encoded CA cert file to use to verify the
 	// Vault server SSL certificate.
@@ -63,8 +61,8 @@ type VaultEnvelopeConfig struct {
 	AuthPath string `json:"auth-path"`
 }
 
-// Factory function that create Vault KMS service
-func VaultKMSFactory(configFile io.Reader) (envelope.Service, error) {
+// KMSFactory function creates Vault KMS service
+func KMSFactory(configFile io.Reader) (envelope.Service, error) {
 	configFileContents, err := ioutil.ReadAll(configFile)
 	if err != nil {
 		return nil, fmt.Errorf("could not read contents: %v", err)
