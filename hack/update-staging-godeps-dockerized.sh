@@ -65,9 +65,9 @@ kube::util::ensure-temp-dir
 TMP_GOPATH="${KUBE_TEMP}/go"
 
 function updateGodepManifest() 
-  echo ${TMP_GOPATH}
-  echo ${repo}
   pushd "${TMP_GOPATH}/src/k8s.io/${repo}" >/dev/null
+    echo ${TMP_GOPATH}
+    echo ${repo}
     kube::log::status "Updating godeps for k8s.io/${repo}"
     rm -rf Godeps # remove the current Godeps.json so we always rebuild it
     GOPATH="${TMP_GOPATH}:${GOPATH}:${GOPATH}/src/k8s.io/kubernetes/staging" godep save ${GODEP_OPTS} ./... 2>&1 | sed 's/^/  /'
