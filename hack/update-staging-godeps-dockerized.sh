@@ -64,7 +64,7 @@ fi
 kube::util::ensure-temp-dir
 TMP_GOPATH="${KUBE_TEMP}/go"
 
-function updateGodepManifest() 
+function updateGodepManifest() { 
   pushd "${TMP_GOPATH}/src/k8s.io/${repo}" >/dev/null
     echo ${TMP_GOPATH}
     echo ${repo}
