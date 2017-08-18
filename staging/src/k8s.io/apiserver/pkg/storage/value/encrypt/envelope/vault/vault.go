@@ -29,8 +29,8 @@ import (
 	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 )
 
-// envelopConfig contains connection information for Vault transformer
-type envelopeConfig struct {
+//EnvelopConfig contains connection information for Vault transformer
+type EnvelopeConfig struct {
 	// The names of encryption key for Vault transit communication
 	KeyNames []string `json:"key-names"`
 	// Vault listen address, for example https://localhost:8200
@@ -68,7 +68,7 @@ func KMSFactory(configFile io.Reader) (envelope.Service, error) {
 		return nil, fmt.Errorf("could not read contents: %v", err)
 	}
 
-	var config VaultEnvelopeConfig
+	var config EnvelopeConfig
 	err = yaml.Unmarshal(configFileContents, &config)
 	if err != nil {
 		return nil, fmt.Errorf("error while parsing file: %v", err)
@@ -87,7 +87,7 @@ func KMSFactory(configFile io.Reader) (envelope.Service, error) {
 	return &vaultEnvelopeService{config: &config, client: client}, nil
 }
 
-func checkConfig(config *VaultEnvelopeConfig) error {
+func checkConfig(config *EnvelopeConfig) error {
 	if len(config.KeyNames) == 0 {
 		return fmt.Errorf("vault provider has no valid key names")
 	}
@@ -99,7 +99,7 @@ func checkConfig(config *VaultEnvelopeConfig) error {
 	return checkAuthConfig(config)
 }
 
-func checkAuthConfig(config *VaultEnvelopeConfig) error {
+func checkAuthConfig(config *EnvelopeConfig) error {
 	var count uint
 
 	if config.Token != "" {
@@ -113,8 +113,8 @@ func checkAuthConfig(config *VaultEnvelopeConfig) error {
 		count++
 	}
 
-	if config.RoleId != "" || config.SecretId != "" {
-		if config.RoleId == "" {
+	if config.RoleID != "" || config.SecretID != "" {
+		if config.RoleID == "" {
 			return fmt.Errorf("vault provider has invalid approle authentication information")
 		}
 		count++
@@ -131,7 +131,7 @@ func checkAuthConfig(config *VaultEnvelopeConfig) error {
 }
 
 type vaultEnvelopeService struct {
-	config *VaultEnvelopeConfig
+	config *EnvelopeConfig
 	client *clientWrapper
 }
 

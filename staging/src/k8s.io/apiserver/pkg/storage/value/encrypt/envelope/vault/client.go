@@ -40,7 +40,7 @@ type clientWrapper struct {
 }
 
 // Initialize a client wrapper for vault kms provider.
-func newClientWrapper(config *VaultEnvelopeConfig) (*clientWrapper, error) {
+func newClientWrapper(config *EnvelopeConfig) (*clientWrapper, error) {
 	client, err := newVaultClient(config)
 	if err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func newClientWrapper(config *VaultEnvelopeConfig) (*clientWrapper, error) {
 	return wrapper, nil
 }
 
-func newVaultClient(config *VaultEnvelopeConfig) (*api.Client, error) {
+func newVaultClient(config *EnvelopeConfig) (*api.Client, error) {
 	vaultConfig := api.DefaultConfig()
 	vaultConfig.Address = config.Address
 
@@ -96,7 +96,7 @@ func newVaultClient(config *VaultEnvelopeConfig) (*api.Client, error) {
 }
 
 // Get token by login and set the value to api.Client.
-func (c *clientWrapper) refreshToken(config *VaultEnvelopeConfig, version uint) error {
+func (c *clientWrapper) refreshToken(config *EnvelopeConfig, version uint) error {
 	c.rwmutex.Lock()
 	defer c.rwmutex.Unlock()
 
@@ -119,7 +119,7 @@ func (c *clientWrapper) refreshToken(config *VaultEnvelopeConfig, version uint) 
 	return err
 }
 
-func (c *clientWrapper) tlsToken(config *VaultEnvelopeConfig) error {
+func (c *clientWrapper) tlsToken(config *EnvelopeConfig) error {
 	resp, err := c.client.Logical().Write(c.authPath+"cert/login", nil)
 	if err != nil {
 		return err
@@ -129,7 +129,7 @@ func (c *clientWrapper) tlsToken(config *VaultEnvelopeConfig) error {
 	return nil
 }
 
-func (c *clientWrapper) appRoleToken(config *VaultEnvelopeConfig) error {
+func (c *clientWrapper) appRoleToken(config *EnvelopeConfig) error {
 	data := map[string]interface{}{
 		"role_id":   config.RoleID,
 		"secret_id": config.SecretID,
