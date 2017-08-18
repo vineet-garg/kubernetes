@@ -55,7 +55,7 @@ func TestTypicalCase(t *testing.T) {
 		CACert:     cafile,
 	}
 	configRole := &EnvelopeConfig{
-		RoleId:  uuid.NewRandom().String(),
+		RoleID:  uuid.NewRandom().String(),
 		Address: server.URL,
 		CACert:  cafile,
 	}
@@ -116,7 +116,7 @@ func TestCustomAuthPath(t *testing.T) {
 	defer server.Close()
 
 	appRoleConfig := &EnvelopeConfig{
-		RoleId:  uuid.NewRandom().String(),
+		RoleID:  uuid.NewRandom().String(),
 		Address: server.URL,
 		CACert:  cafile,
 	}
@@ -246,7 +246,7 @@ func TestRefreshToken(t *testing.T) {
 		CACert:     cafile,
 	}
 	configRole := &EnvelopeConfig{
-		RoleId:  uuid.NewRandom().String(),
+		RoleID:  uuid.NewRandom().String(),
 		Address: server.URL,
 		CACert:  cafile,
 	}

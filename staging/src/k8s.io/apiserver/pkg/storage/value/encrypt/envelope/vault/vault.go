@@ -29,7 +29,7 @@ import (
 	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 )
 
-//EnvelopConfig contains connection information for Vault transformer
+//EnvelopeConfig contains connection information for Vault transformer
 type EnvelopeConfig struct {
 	// The names of encryption key for Vault transit communication
 	KeyNames []string `json:"key-names"`
