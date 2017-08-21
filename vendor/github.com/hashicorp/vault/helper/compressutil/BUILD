@@ -11,6 +11,7 @@ go_library(
     name = "go_default_library",
     srcs = ["compress.go"],
     tags = ["automanaged"],
+    deps = ["//vendor/github.com/golang/snappy:go_default_library"],
 )
 
 filegroup(
