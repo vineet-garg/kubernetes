@@ -30,6 +30,8 @@ import (
 	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 )
 
+const vaultPrefix = "vault"
+
 //EnvelopeConfig contains connection information for Vault transformer
 type EnvelopeConfig struct {
 	// The names of encryption key for Vault transit communication
@@ -154,7 +156,7 @@ func (s *vaultEnvelopeService) Decrypt(data string) ([]byte, error) {
 	}
 
 	// Replace the key name with "vault:" for Vault transit API
-	cipher := strings.Replace(data, key, "vault", 1)
+	cipher := strings.Replace(data, key, vaultPrefix, 1)
 
 	//plain, _, err := s.client.decrypt(key, cipher)
 	plain, err := s.withRefreshToken((*clientWrapper).decrypt, key, cipher)
@@ -177,7 +179,7 @@ func (s *vaultEnvelopeService) Encrypt(data []byte) (string, error) {
 
 	// The format of cipher from Vault is "vault:v1:....".
 	// "vault:" is unnecessary, replace it with key name.
-	return strings.Replace(cipher, "vault", key, 1), nil
+	return strings.Replace(cipher, vaultPrefix, key, 1), nil
 }
 
 // The function type for clientWrapper.encrypt and clientWrapper.decrypt.
