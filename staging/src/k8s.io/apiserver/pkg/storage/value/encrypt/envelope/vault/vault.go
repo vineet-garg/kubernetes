@@ -23,6 +23,7 @@ import (
 	"io"
 	"io/ioutil"
 	"strings"
+	"sync"
 
 	"github.com/ghodss/yaml"
 
@@ -133,6 +134,10 @@ func checkAuthConfig(config *EnvelopeConfig) error {
 type vaultEnvelopeService struct {
 	config *EnvelopeConfig
 	client *clientWrapper
+	// We may update token for api.Client, but there is no sync for api.Client.
+	// Read lock for encrypt/decrypt requests, write lock for login requests which
+	// will update token for api.Client.
+	rwmutex sync.RWMutex
 }
 
 func (s *vaultEnvelopeService) Decrypt(data string) ([]byte, error) {
@@ -180,21 +185,25 @@ type encryptOrDecryptFunc func(*clientWrapper, string, string) (string, error)
 
 func (s *vaultEnvelopeService) withRefreshToken(f encryptOrDecryptFunc, key, data string) (string, error) {
 	// Execute operation first time.
+	s.rwmutex.RLock()
 	result, err := f(s.client, key, data)
+	s.rwmutex.RUnlock()
 	if err == nil || s.config.Token != "" {
 		return result, err
 	}
-
-	forbidden, ok := err.(*forbiddenError)
+	_, ok := err.(*forbiddenError)
 	if !ok {
 		return result, err
 	}
 
 	// The request is forbidden, refresh token and execute operation again.
-	err = s.client.refreshToken(s.config, forbidden.version)
+	s.rwmutex.Lock()
+	defer s.rwmutex.Unlock()
+	err = s.client.refreshToken(s.config)
 	if err != nil {
 		return result, err
 	}
 
-	return f(s.client, key, data)
+	secret, requestErr := f(s.client, key, data)
+	return secret, requestErr
 }

@@ -218,7 +218,7 @@ func TestForbiddenRequest(t *testing.T) {
 	if !ok {
 		t.Error("forbidden error should be return for 403 response")
 	}
-	if forbidden.version != client.version || forbidden.err == nil {
+	if forbidden.err == nil {
 		t.Errorf("error forbidden value, %+v", forbidden)
 	}
 
@@ -230,7 +230,7 @@ func TestForbiddenRequest(t *testing.T) {
 	if !ok {
 		t.Error("forbidden error should be return for 403 response")
 	}
-	if forbidden.version != client.version || forbidden.err == nil {
+	if forbidden.err == nil {
 		t.Errorf("error forbidden value, %+v", forbidden)
 	}
 }
@@ -265,26 +265,10 @@ func TestRefreshToken(t *testing.T) {
 			t.Fatalf("name: %s, fail to initialize Vault client: %s", testCase.name, err)
 		}
 
-		version := client.version
-
-		// Refresh token successfully with version increase.
-		err = client.refreshToken(testCase.config, version)
+		// Refresh token successfully.
+		err = client.refreshToken(testCase.config)
 		if err != nil {
 			t.Fatalf("name: %s, unexpecte error when refresh token: %s", testCase.name, err)
-		}
-		if client.version != version+1 {
-			t.Errorf("name: %s, client version expect %s, but %s", testCase.name, version+1, client.version)
-		}
-
-		// Refresh token with old version, not increase version.
-		oldVersion := version
-		version = client.version
-		err = client.refreshToken(testCase.config, oldVersion)
-		if err != nil {
-			t.Fatalf("name: %s, unexpecte error when refresh token: %s", testCase.name, err)
-		}
-		if client.version != version {
-			t.Errorf("name: %s, client version expect %s, but %s", testCase.name, version, client.version)
 		}
 	}
 }

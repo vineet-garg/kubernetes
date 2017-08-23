@@ -19,8 +19,8 @@ package vault
 
 import (
 	"fmt"
+	"path"
 	"strings"
-	"sync"
 
 	"github.com/hashicorp/vault/api"
 )
@@ -31,12 +31,6 @@ type clientWrapper struct {
 	encryptPath string
 	decryptPath string
 	authPath    string
-
-	// We may update token for api.Client, but there is no sync for api.Client.
-	// Read lock for encrypt/decrypt requests, write lock for login requests which
-	// will update token for api.Client.
-	rwmutex sync.RWMutex
-	version uint
 }
 
 // Initialize a client wrapper for vault kms provider.
@@ -54,22 +48,22 @@ func newClientWrapper(config *EnvelopeConfig) (*clientWrapper, error) {
 	}
 
 	// auth path is configurable. "path", "/path", "path/" and "/path/" are the same.
-	auth := "auth/"
+	auth := "auth"
 	if config.AuthPath != "" {
 		auth = strings.Trim(config.AuthPath, "/")
 	}
 	wrapper := &clientWrapper{
 		client:      client,
-		encryptPath: "/v1/" + transit + "/encrypt/",
-		decryptPath: "/v1/" + transit + "/decrypt/",
-		authPath:    auth + "/",
+		encryptPath: "/" + path.Join("v1", transit, "encrypt") + "/",
+		decryptPath: "/" + path.Join("v1", transit, "decrypt") + "/",
+		authPath:    "/" + path.Join(auth) + "/",
 	}
 
 	// Set token for the api.client.
 	if config.Token != "" {
 		client.SetToken(config.Token)
 	} else {
-		err = wrapper.refreshToken(config, wrapper.version)
+		err = wrapper.refreshToken(config)
 	}
 	if err != nil {
 		return nil, err
@@ -96,51 +90,50 @@ func newVaultClient(config *EnvelopeConfig) (*api.Client, error) {
 }
 
 // Get token by login and set the value to api.Client.
-func (c *clientWrapper) refreshToken(config *EnvelopeConfig, version uint) error {
-	c.rwmutex.Lock()
-	defer c.rwmutex.Unlock()
+func (c *clientWrapper) refreshToken(config *EnvelopeConfig) error {
 
-	// The token has been refreshed by other goroutine.
-	if version < c.version {
-		return nil
-	}
-
-	var err error
 	switch {
 	case config.ClientCert != "" && config.ClientKey != "":
-		err = c.tlsToken(config)
+		token, err := c.tlsToken(config)
+		if err != nil {
+			return err
+		}
+		c.client.SetToken(token)
 	case config.RoleID != "":
-		err = c.appRoleToken(config)
+		token, err := c.appRoleToken(config)
+		if err != nil {
+			return err
+		}
+		c.client.SetToken(token)
 	default:
-		err = fmt.Errorf("invalid authentication configuration %+v", config)
-	}
-
-	c.version++
-	return err
-}
-
-func (c *clientWrapper) tlsToken(config *EnvelopeConfig) error {
-	resp, err := c.client.Logical().Write(c.authPath+"cert/login", nil)
-	if err != nil {
+		// configuration has already been validated, flow should not reach here
+		err := fmt.Errorf("The Vault authentication configuration is invalid")
 		return err
 	}
 
-	c.client.SetToken(resp.Auth.ClientToken)
 	return nil
 }
 
-func (c *clientWrapper) appRoleToken(config *EnvelopeConfig) error {
+func (c *clientWrapper) tlsToken(config *EnvelopeConfig) (string, error) {
+	resp, err := c.client.Logical().Write(c.authPath+"cert/login", nil)
+	if err != nil {
+		return "", err
+	}
+
+	return resp.Auth.ClientToken, nil
+}
+
+func (c *clientWrapper) appRoleToken(config *EnvelopeConfig) (string, error) {
 	data := map[string]interface{}{
 		"role_id":   config.RoleID,
 		"secret_id": config.SecretID,
 	}
 	resp, err := c.client.Logical().Write(c.authPath+"approle/login", data)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	c.client.SetToken(resp.Auth.ClientToken)
-	return nil
+	return resp.Auth.ClientToken, nil
 }
 
 func (c *clientWrapper) decrypt(keyName string, cipher string) (string, error) {
@@ -179,42 +172,40 @@ func (c *clientWrapper) encrypt(keyName string, plain string) (string, error) {
 
 // This request check the response status code. If get code 403, it sets forbidden true.
 func (c *clientWrapper) request(path string, data interface{}) (*api.Secret, error) {
-	c.rwmutex.RLock()
-	defer c.rwmutex.RUnlock()
-
 	req := c.client.NewRequest("POST", path)
 	if err := req.SetJSONBody(data); err != nil {
 		return nil, err
 	}
 
 	resp, err := c.client.RawRequest(req)
+
 	if resp != nil {
 		defer resp.Body.Close()
-	}
-	if resp.StatusCode == 403 {
-		return nil, &forbiddenError{version: c.version, err: err}
+		if resp.StatusCode == 403 {
+			return nil, &forbiddenError{err: err}
+		}
+
+		if resp.StatusCode == 200 {
+			secret, err := api.ParseSecret(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			return secret, nil
+		}
+		return nil, fmt.Errorf("Unexpected response code: %v received for POST request to %v", resp.StatusCode, path)
 	}
 	if err != nil {
 		return nil, err
 	}
+	return nil, fmt.Errorf("No response received for POST request to %v", path)
 
-	if resp.StatusCode == 200 {
-		secret, err := api.ParseSecret(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		return secret, nil
-	}
-
-	return nil, nil
 }
 
 // Return this error when get HTTP code 403.
 type forbiddenError struct {
-	version uint
-	err     error
+	err error
 }
 
 func (e *forbiddenError) Error() string {
-	return fmt.Sprintf("version %d, error %s", e.version, e.err)
+	return fmt.Sprintf("error %s", e.err)
 }
