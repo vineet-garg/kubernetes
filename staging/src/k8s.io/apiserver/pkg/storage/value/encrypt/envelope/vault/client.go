@@ -20,6 +20,7 @@ package vault
 import (
 	"fmt"
 	"path"
+	"reflect"
 	"strings"
 
 	"github.com/hashicorp/vault/api"
@@ -147,7 +148,7 @@ func (c *clientWrapper) decrypt(keyName string, cipher string) (string, error) {
 
 	result, ok := resp.Data["plaintext"].(string)
 	if !ok {
-		return result, fmt.Errorf("failed type assertion of vault decrypt response to string")
+		return result, fmt.Errorf("failed type assertion of vault decrypt response type: %v to string", reflect.TypeOf(resp.Data["plaintext"]))
 	}
 
 	return result, nil
@@ -164,7 +165,7 @@ func (c *clientWrapper) encrypt(keyName string, plain string) (string, error) {
 
 	result, ok := resp.Data["ciphertext"].(string)
 	if !ok {
-		return result, fmt.Errorf("failed type assertion of vault encrypt response to string")
+		return result, fmt.Errorf("failed type assertion of vault encrypt response type: %v to string", reflect.TypeOf(resp.Data["ciphertext"]))
 	}
 
 	return result, nil
