@@ -309,23 +309,26 @@ role-id: 655a9287-f1be-4be0-844c-4f13a1757532
 `
 
 	invalidConfigs := []struct {
+		name        string
 		config      string
 		description string
 	}{
-		{configWithoutKey, "there is no key name"},
-		{configWithoutAddress, "there is no address"},
-		{configWithoutAuth, "there is no authentication"},
-		{configTLSWithoutClientKey, "there is no client key file"},
-		{configTLSWithoutClientCert, "there is no client cert file"},
-		{configRoleWithoutRoleID, "there is no role id"},
-		{configMoreThanOneAuth, "there are more than one authentications"},
+		{"configWithoutKey", configWithoutKey, "there is no key name"},
+		{"configWithoutAddress", configWithoutAddress, "there is no address"},
+		{"configWithoutAuth", configWithoutAuth, "there is no authentication"},
+		{"configTLSWithoutClientKey", configTLSWithoutClientKey, "there is no client key file"},
+		{"configTLSWithoutClientCert", configTLSWithoutClientCert, "there is no client cert file"},
+		{"configRoleWithoutRoleID", configRoleWithoutRoleID, "there is no role id"},
+		{"configMoreThanOneAuth", configMoreThanOneAuth, "there are more than one authentications"},
 	}
 
 	for _, testCase := range invalidConfigs {
-		_, err := serviceTestFactory(testCase.config, server.URL, key)
-		if err == nil {
-			t.Fatal("should fail to create vault KMS service when " + testCase.description)
-		}
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := serviceTestFactory(testCase.config, server.URL, key)
+			if err == nil {
+				t.Fatal("should fail to create vault KMS service when " + testCase.description)
+			}
+		})
 	}
 }
 

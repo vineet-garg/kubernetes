@@ -115,7 +115,7 @@ func (c *clientWrapper) refreshToken(config *EnvelopeConfig) error {
 }
 
 func (c *clientWrapper) tlsToken(config *EnvelopeConfig) (string, error) {
-	resp, err := c.client.Logical().Write("/" + path.Join(c.authPath, "cert", "login"), nil)
+	resp, err := c.client.Logical().Write("/"+path.Join(c.authPath, "cert", "login"), nil)
 	if err != nil {
 		return "", err
 	}
@@ -128,7 +128,7 @@ func (c *clientWrapper) appRoleToken(config *EnvelopeConfig) (string, error) {
 		"role_id":   config.RoleID,
 		"secret_id": config.SecretID,
 	}
-	resp, err := c.client.Logical().Write("/" + path.Join(c.authPath, "approle", "login"), data)
+	resp, err := c.client.Logical().Write("/"+path.Join(c.authPath, "approle", "login"), data)
 	if err != nil {
 		return "", err
 	}
@@ -172,7 +172,7 @@ func (c *clientWrapper) encrypt(keyName string, plain string) (string, error) {
 
 // This request check the response status code. If get code 403, it sets forbidden true.
 func (c *clientWrapper) request(path string, data interface{}) (*api.Secret, error) {
-	req := c.client.NewRequest("POST", "/" + path)
+	req := c.client.NewRequest("POST", "/"+path)
 	if err := req.SetJSONBody(data); err != nil {
 		return nil, err
 	}
