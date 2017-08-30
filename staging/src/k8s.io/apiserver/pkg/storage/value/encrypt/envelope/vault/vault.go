@@ -199,12 +199,12 @@ func (s *vaultEnvelopeService) withRefreshToken(f encryptOrDecryptFunc, key, dat
 	}
 
 	// The request is forbidden, refresh token and execute operation again.
-        // with the expected usage: 
-        //a. rare calls to KMS provider for decrypt during secret read due to DEK caching, 
-        //b. rare concurrent secret creation,
-        //c. Token policy having reasonable expiry and num. of use
-        // the locking is not expected to degrade performance for normal usage scenarios,
-        // The race condition is still eliminated for worst case scenarios. 
+	// with the expected usage:
+	//a. rare calls to KMS provider for decrypt during secret read due to DEK caching,
+	//b. rare concurrent secret creation,
+	//c. Token policy having reasonable expiry and num. of use
+	// the locking is not expected to degrade performance for normal usage scenarios,
+	// The race condition is still eliminated for worst case scenarios.
 	s.rwmutex.Lock()
 	defer s.rwmutex.Unlock()
 	err = s.client.refreshToken(s.config)
